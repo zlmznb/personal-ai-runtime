@@ -18,6 +18,13 @@ Three modes:
     other is returned **unchanged**, so installing an embedding provider can only
     ever add recall, never reorder an existing result set.
 
+Scope visibility
+----------------
+Every mode respects a :class:`~memory_core.domain.scopes.Visibility`. With no
+scope arguments the default is **fail-closed**: every scope except ``persona:*``.
+Naming a persona widens it to ``global`` + that persona. See
+``domain/scopes.py``.
+
 No mode ever writes. Index construction is explicit (see ``SemanticIndexer``),
 which is what keeps recall safe to call in a byte-identity assertion.
 """
@@ -29,6 +36,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from memory_core.domain.dto import RecallHit
 from memory_core.domain.enums import ItemType
 from memory_core.domain.errors import ProviderError
+from memory_core.domain.scopes import Visibility, resolve_visibility
 from memory_core.retrieval import fusion, tokenize
 
 #: Supported retrieval modes.
@@ -38,12 +46,21 @@ MODES = ("keyword", "semantic", "hybrid")
 class Retriever(object):
     """Deterministic retrieval over memories and preferences."""
 
-    def __init__(self, store, weights=None, vector_index=None, embedding_provider=None):
-        # type: (Any, Any, Any, Any) -> None
+    def __init__(
+        self,
+        store,
+        weights=None,
+        vector_index=None,
+        embedding_provider=None,
+        persona=None,
+    ):
+        # type: (Any, Any, Any, Any, Optional[str]) -> None
         self.store = store
         self.weights = weights or fusion.DEFAULT_WEIGHTS
         self.vector_index = vector_index
         self.embedding_provider = embedding_provider
+        #: Default persona for reads that do not name one.
+        self.persona = persona
 
     @property
     def semantic_available(self):
@@ -64,6 +81,9 @@ class Retriever(object):
         limit=10,                   # type: int
         include_preferences=True,   # type: bool
         mode="hybrid",              # type: str
+        scopes=None,                # type: Optional[Sequence[str]]
+        persona=None,               # type: Optional[str]
+        visibility=None,            # type: Optional[Visibility]
     ):
         # type: (...) -> List[RecallHit]
         """Return ranked hits for ``query``. An unsearchable query returns []."""
@@ -74,9 +94,12 @@ class Retriever(object):
         limit = int(limit)
         fetch = max(limit * 3, limit)
 
+        if visibility is None:
+            visibility = self._visibility(scope, scopes, persona)
+
         expression = tokenize.build_match_expression(query)
         keyword_hits = (
-            self._keyword_hits(expression, query, scope, kinds, fetch, include_preferences)
+            self._keyword_hits(expression, query, visibility, kinds, fetch, include_preferences)
             if expression is not None
             else []
         )
@@ -84,7 +107,11 @@ class Retriever(object):
         if mode == "keyword":
             return keyword_hits[:limit]
 
-        semantic_hits = self._semantic_hits(query, scope, kinds, fetch) if self.semantic_available else []
+        semantic_hits = (
+            self._semantic_hits(query, visibility, kinds, fetch)
+            if self.semantic_available
+            else []
+        )
 
         if mode == "semantic":
             return semantic_hits[:limit]
@@ -98,16 +125,33 @@ class Retriever(object):
             return semantic_hits[:limit]
         return fusion.fuse_hybrid(keyword_hits, semantic_hits, self.weights, limit=limit)
 
+    def _visibility(self, scope, scopes, persona):
+        # type: (Optional[str], Optional[Sequence[str]], Optional[str]) -> Visibility
+        effective = persona if persona is not None else self.persona
+        return resolve_visibility(scope=scope, scopes=scopes, persona=effective)
+
     # -- keyword -----------------------------------------------------------
 
-    def _keyword_hits(self, expression, query, scope, kinds, limit, include_preferences):
-        # type: (str, str, Optional[str], Optional[Sequence[str]], int, bool) -> List[RecallHit]
+    def _keyword_hits(self, expression, query, visibility, kinds, limit, include_preferences):
+        # type: (str, str, Visibility, Optional[Sequence[str]], int, bool) -> List[RecallHit]
         needle = tokenize.phrase_needle(query)
         memory_rows = self.store.search_memories(
-            expression, needle, scope=scope, kinds=kinds, statuses=("active",), limit=limit
+            expression,
+            needle,
+            scopes=visibility.scopes,
+            exclude_prefixes=visibility.exclude_prefixes,
+            kinds=kinds,
+            statuses=("active",),
+            limit=limit,
         )
         preference_rows = (
-            self.store.search_preferences(expression, needle, scope=scope, limit=limit)
+            self.store.search_preferences(
+                expression,
+                needle,
+                scopes=visibility.scopes,
+                exclude_prefixes=visibility.exclude_prefixes,
+                limit=limit,
+            )
             if include_preferences
             else []
         )
@@ -115,8 +159,8 @@ class Retriever(object):
 
     # -- semantic ----------------------------------------------------------
 
-    def _semantic_hits(self, query, scope, kinds, limit):
-        # type: (str, Optional[str], Optional[Sequence[str]], int) -> List[RecallHit]
+    def _semantic_hits(self, query, visibility, kinds, limit):
+        # type: (str, Visibility, Optional[Sequence[str]], int) -> List[RecallHit]
         """Vector search. A provider or index failure degrades to no hits."""
         if not tokenize.query_units(query):
             # A query with no searchable content ("!!!") has no meaningful
@@ -149,7 +193,8 @@ class Retriever(object):
             # relying on the index to be pruned.
             if memory.status != "active":
                 continue
-            if scope is not None and memory.scope != scope:
+            # The vector index is not scope-aware, so visibility is enforced here.
+            if not visibility.allows(memory.scope):
                 continue
             if kinds and memory.kind not in kinds:
                 continue
@@ -171,6 +216,7 @@ class Retriever(object):
             "modes": list(MODES),
             "default_mode": "hybrid",
             "semantic_available": self.semantic_available,
+            "persona": self.persona,
             "weights": self.weights.as_dict(),
         }  # type: Dict[str, Any]
         if self.vector_index is not None:

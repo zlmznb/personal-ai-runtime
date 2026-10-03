@@ -14,7 +14,7 @@ The goal is **not** a "memory chatbot". The goal is to prove one thing:
 
 ---
 
-## Status: v0.2 Memory Intelligence
+## Status: v0.3 Personal Knowledge Bridge
 
 **v0.1 (durable core)** — SQLite source of truth · event log · memories ·
 preferences · project state · FTS5 retrieval · `remember`/`recall`/`forget`/
@@ -26,6 +26,24 @@ NOOP) with strict schema validation · candidate lifecycle with accept/reject
 verdicts · an independent `EmbeddingProvider` · a derived, disposable,
 rebuildable `VectorIndex` · hybrid retrieval (FTS5 + vectors via RRF) · MSIT-2 ·
 measured performance at 100 / 1,000 / 10,000 memories.
+
+**v0.3 (knowledge bridge)** — the first real consumer. Obsidian notes become
+events and then memories; memories become a read-only markdown mirror. Two
+one-way pipelines, never a sync · deterministic chunking with declaration
+boundaries · four routes (knowledge / declaration / preference / project state) ·
+document- and chunk-level idempotency · full provenance on every derived record ·
+fail-closed `persona` scope isolation · `import` is dry-run by default.
+
+```powershell
+py -3 scripts/demo_obsidian_bridge.py          # 35-check acceptance demo, no model
+py -3 -m memory_bridge status   <vault>       # what would an import do?
+py -3 -m memory_bridge import   <vault>       # dry run (writes nothing at all)
+py -3 -m memory_bridge import   <vault> --apply
+py -3 -m memory_bridge export   <vault>       # AI Memory/ mirror
+```
+
+See [`docs/v0.3_implementation.md`](docs/v0.3_implementation.md) for the measured
+evidence, and [`docs/v0.3_design.md`](docs/v0.3_design.md) for the approved design.
 
 Not implemented (deliberately): Chroma, Qdrant, sqlite-vec, LiteLLM, Mem0,
 LangGraph, MCP, Agent, Web UI, mobile, IoT, cloud sync, multi-user, scheduled
@@ -181,8 +199,10 @@ run under pytest if you have it.
 py -3 -m unittest discover -s tests -t . -v
 ```
 
-The default suite needs **no network and no model**: 536 tests, of which 11 are
-opt-in integration tests that skip. Verified on Python 3.8.6 and 3.12.14.
+The default suite needs **no network and no model**: 667 tests, of which 11 are
+opt-in integration tests that skip. 131 of them are the v0.3 bridge tests
+(vault scanning, chunking, routing, import, export, isolation, purity). Verified
+on Python 3.8.6 and 3.12.14.
 
 ### Opt-in real-model integration
 
@@ -191,7 +211,7 @@ $env:MEMORY_TEST_OLLAMA = "1"
 py -3 -m unittest tests.test_ollama_integration -v
 ```
 
-With a local Ollama: 536 tests, 0 skipped, 0 failures.
+With a local Ollama: 667 tests, 0 skipped, 0 failures.
 
 Requires Ollama with a chat model (`qwen3:8b` by default) and at least one
 embedding model (`ollama pull nomic-embed-text all-minilm`). Override with

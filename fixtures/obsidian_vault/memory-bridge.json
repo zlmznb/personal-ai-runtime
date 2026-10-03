@@ -1,0 +1,19 @@
+{
+  "_comment": "Bridge config for the demo vault. Copy to memory-bridge.json in your own vault. Only paths listed in 'exclude' are skipped; 'include' defaults to **/*.md.",
+  "vault_id": "demo-vault",
+  "export_dir": "AI Memory",
+  "default_scope": "global",
+  "exclude": [
+    ".obsidian/**",
+    ".trash/**",
+    "AI Memory/**",
+    "**/*.md.bak",
+    "Private/**"
+  ],
+  "scope_map": {
+    "Projects/*": "project:{name}",
+    "Projects/*/**": "project:{name}",
+    "Personas/*": "persona:{name}",
+    "Personas/*/**": "persona:{name}"
+  }
+}

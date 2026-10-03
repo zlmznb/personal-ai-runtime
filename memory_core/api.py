@@ -43,6 +43,11 @@ from memory_core.domain.errors import (
     ValidationError,
 )
 from memory_core.domain.records import Event, Memory, Preference, ProjectState
+from memory_core.domain.scopes import (
+    ALL_VISIBILITY,
+    resolve_visibility,
+    visibility_for_scope,
+)
 from memory_core.formation.base import (
     MEMORY,
     PREFERENCE,
@@ -151,6 +156,7 @@ class MemoryCore(object):
         vector_index=None,           # type: Optional[VectorIndex]
         policy=None,                 # type: Optional[AcceptancePolicy]
         use_llm_formation=True,      # type: bool
+        persona=None,                # type: Optional[str]
     ):
         # type: (...) -> None
         self.store = store
@@ -160,6 +166,9 @@ class MemoryCore(object):
         self.embedding_provider = embedding_provider
         self.policy = policy or DEFAULT_POLICY
         self.use_llm_formation = bool(use_llm_formation)
+        #: Default persona for reads. ``None`` means "no persona": reads then see
+        #: every scope except ``persona:*`` (fail-closed).
+        self.persona = persona
 
         if vector_index is not None and embedding_provider is not None:
             if vector_index.model_id != embedding_provider.identifier():
@@ -178,6 +187,7 @@ class MemoryCore(object):
             weights=weights,
             vector_index=vector_index,
             embedding_provider=embedding_provider,
+            persona=persona,
         )
         self.llm_extractor = (
             LlmExtractor(provider) if (provider is not None and self.use_llm_formation) else None
@@ -199,6 +209,7 @@ class MemoryCore(object):
         embedding_model=None,            # type: Optional[str]
         embedding_provider=None,         # type: Optional[EmbeddingProvider]
         use_llm_formation=True,          # type: bool
+        persona=None,                    # type: Optional[str]
     ):
         # type: (...) -> "MemoryCore"
         """Open (creating if necessary) a memory database.
@@ -236,6 +247,7 @@ class MemoryCore(object):
             provider=resolved_chat,
             embedding_provider=resolved_embedding,
             use_llm_formation=use_llm_formation,
+            persona=persona,
         )
 
     def close(self):
@@ -283,6 +295,10 @@ class MemoryCore(object):
         role="user",           # type: str
         session_id=None,       # type: Optional[str]
         scope="global",        # type: str
+        kind="message",        # type: str
+        metadata=None,         # type: Optional[Dict[str, Any]]
+        source="cli",          # type: str
+        provenance=None,       # type: Optional[Dict[str, Any]]
     ):
         # type: (...) -> Observation
         """Record an utterance and run the deterministic rules over it.
@@ -290,7 +306,10 @@ class MemoryCore(object):
         No model is involved, by design: explicit instructions such as
         ``记住：...`` must keep working with nothing installed.
         """
-        return self._form_and_apply(text, [self.extractor], role, session_id, scope, 0)
+        return self._form_and_apply(
+            text, [self.extractor], role, session_id, scope, 0,
+            kind=kind, metadata=metadata, source=source, provenance=provenance,
+        )
 
     def learn(
         self,
@@ -299,17 +318,29 @@ class MemoryCore(object):
         session_id=None,       # type: Optional[str]
         scope="global",        # type: str
         context_limit=5,       # type: int
+        kind="message",        # type: str
+        metadata=None,         # type: Optional[Dict[str, Any]]
+        source="cli",          # type: str
+        provenance=None,       # type: Optional[Dict[str, Any]]
     ):
         # type: (...) -> Observation
         """Record an utterance, then run rules *and* LLM formation over it.
 
         The event is always written, even when every candidate is rejected: raw
         history is never lost, so the turn can be re-extracted later.
+
+        ``kind`` / ``metadata`` / ``source`` are forwarded to the event, and
+        ``provenance`` is merged into every committed record's ``source``. That
+        is how an external consumer (a Bridge) attaches where a memory came
+        from. All four default to the v0.2 behaviour.
         """
         extractors = [self.extractor]
         if self.llm_extractor is not None:
             extractors.append(self.llm_extractor)
-        return self._form_and_apply(text, extractors, role, session_id, scope, context_limit)
+        return self._form_and_apply(
+            text, extractors, role, session_id, scope, context_limit,
+            kind=kind, metadata=metadata, source=source, provenance=provenance,
+        )
 
     def propose(
         self,
@@ -348,13 +379,25 @@ class MemoryCore(object):
 
     def _formation_context(self, text, scope, limit):
         # type: (str, str, int) -> Tuple[List[Any], Optional[str]]
-        """Existing memories shown to an LLM extractor. Read-only."""
+        """Existing memories shown to an LLM extractor. Read-only.
+
+        Visibility is derived from the scope being written *into*, so forming a
+        memory in ``persona:aria`` can see ``global`` and ``persona:aria``, and
+        can never see ``persona:bruno``. This is the second half of the persona
+        isolation guarantee - without it the leak would simply move from
+        retrieval into the prompt.
+        """
         if limit is None or int(limit) <= 0:
             return [], None
         if self.llm_extractor is None or not str(text or "").strip():
             return [], None
+        visibility = visibility_for_scope(scope)
         hits = self.retriever.recall(
-            text, scope=scope, limit=int(limit), include_preferences=False, mode="hybrid"
+            text,
+            visibility=visibility,
+            limit=int(limit),
+            include_preferences=False,
+            mode="hybrid",
         )
         return [hit.item for hit in hits if hit.item_type == "memory"], None
 
@@ -433,10 +476,16 @@ class MemoryCore(object):
             if normalize_text(memory.content) == target
         )
 
-    def _form_and_apply(self, text, extractors, role, session_id, scope, context_limit):
-        # type: (str, Sequence[Extractor], str, Optional[str], str, int) -> Observation
+    def _form_and_apply(
+        self, text, extractors, role, session_id, scope, context_limit,
+        kind="message", metadata=None, source="cli", provenance=None,
+    ):
+        # type: (str, Sequence[Extractor], str, Optional[str], str, int, str, Any, str, Any) -> Observation
         """The shared formation pipeline: event -> candidates -> verdict -> commit."""
-        event = self.record_event(text, role=role, session_id=session_id, scope=scope)
+        event = self.record_event(
+            text, role=role, kind=kind, session_id=session_id, scope=scope,
+            metadata=metadata, source=source,
+        )
         needs_context = any(isinstance(extractor, LlmExtractor) for extractor in extractors)
         context = self._formation_context(text, scope, context_limit)[0] if needs_context else []
         candidates, reasons = self._collect(text, extractors, scope, context)
@@ -465,7 +514,7 @@ class MemoryCore(object):
                 continue
 
             try:
-                item_type, record = self._commit(candidate, event)
+                item_type, record = self._commit(candidate, event, provenance)
             except (ValidationError, StorageError, NotFoundError) as exc:
                 # The write either fully happened or fully rolled back; the
                 # candidate is recorded as rejected either way.
@@ -507,17 +556,29 @@ class MemoryCore(object):
             outcomes=tuple(outcomes),
         )
 
-    def _commit(self, candidate, event):
-        # type: (Candidate, Event) -> Tuple[str, Any]
+    def _commit(self, candidate, event, provenance=None):
+        # type: (Candidate, Event, Any) -> Tuple[str, Any]
         """Validate and write one accepted candidate. Raises on any failure.
 
         ``guards.build_*`` validates every field, so a malformed candidate
         raises :class:`ValidationError` and is dropped rather than persisted
         (red line 4 / 9).
+
+        ``provenance`` is merged into the record's ``source`` after the
+        candidate's own source, so a caller (a Bridge) can attach where the
+        content came from without being able to override the formation path
+        recorded by the extractor.
         """
         payload = dict(candidate.payload or {})
         source = dict(payload.get("source") or {})
         source.setdefault("event_ids", [event.id])
+        if provenance:
+            formed_by = source.get("origin")
+            source.update(provenance)
+            if formed_by and not source.get("formed_by"):
+                # Keep the formation path visible even when the caller supplies
+                # its own ``origin``.
+                source["formed_by"] = formed_by
         payload["source"] = source
 
         if candidate.target == MEMORY:
@@ -589,9 +650,43 @@ class MemoryCore(object):
         # type: (str) -> Optional[Memory]
         return self.store.get_memory(memory_id)
 
-    def list_memories(self, scope=None, kinds=None, statuses=("active",), limit=100, offset=0):
-        # type: (Any, Any, Any, int, int) -> List[Memory]
-        return self.store.list_memories(scope=scope, kinds=kinds, statuses=statuses, limit=limit, offset=offset)
+    def list_memories(
+        self,
+        scope=None,
+        kinds=None,
+        statuses=("active",),
+        limit=100,
+        offset=0,
+        scopes=None,
+        persona=None,
+        include_personas=False,
+    ):
+        # type: (Any, Any, Any, int, int, Any, Any, bool) -> List[Memory]
+        visibility = self._read_visibility(scope, scopes, persona, include_personas)
+        return self.store.list_memories(
+            kinds=kinds,
+            statuses=statuses,
+            limit=limit,
+            offset=offset,
+            scopes=visibility.scopes,
+            exclude_prefixes=visibility.exclude_prefixes,
+        )
+
+    def list_events(self, scope=None, session_id=None, limit=100, offset=0):
+        # type: (Optional[str], Optional[str], int, int) -> List[Event]
+        """Read raw history.
+
+        Exposed so an external consumer can implement ingest idempotency
+        (``session_id`` is indexed) without touching storage directly.
+        """
+        return self.store.list_events(
+            scope=scope, session_id=session_id, limit=limit, offset=offset
+        )
+
+    def list_scopes(self):
+        # type: () -> List[str]
+        """Every scope currently holding a row, across all source tables."""
+        return self.store.list_scopes()
 
     def forget(self, memory_id, hard=False):
         # type: (str, bool) -> bool
@@ -613,6 +708,9 @@ class MemoryCore(object):
         limit=None,             # type: Optional[int]
         include_preferences=True,  # type: bool
         mode="hybrid",          # type: str
+        scopes=None,            # type: Optional[Sequence[str]]
+        persona=None,           # type: Optional[str]
+        include_personas=False, # type: bool
     ):
         # type: (...) -> List[RecallHit]
         """Deterministic retrieval: keyword, semantic, or hybrid.
@@ -620,19 +718,31 @@ class MemoryCore(object):
         Model-free on the chat side (ADR 0003). Semantic mode uses the embedding
         provider, which is an independent choice. Hybrid degrades to keyword when
         no embedding provider or no index is available.
+
+        Scope visibility is **fail-closed**: with no scope arguments, ``persona:*``
+        is never returned. See ``domain/scopes.py``.
         """
         if self.config is not None:
             resolved_limit = self.config.retrieval.clamp_limit(limit)
         else:
             resolved_limit = 10 if limit is None else int(limit)
+        visibility = self._read_visibility(scope, scopes, persona, include_personas)
         return self.retriever.recall(
             query,
-            scope=scope,
+            visibility=visibility,
             kinds=kinds,
             limit=resolved_limit,
             include_preferences=include_preferences,
             mode=mode,
         )
+
+    def _read_visibility(self, scope, scopes, persona, include_personas=False):
+        # type: (Any, Any, Any, bool) -> Any
+        """Resolve read visibility, defaulting to the session persona."""
+        if include_personas:
+            return ALL_VISIBILITY
+        effective = persona if persona is not None else self.persona
+        return resolve_visibility(scope=scope, scopes=scopes, persona=effective)
 
     def recall_modes(self):
         # type: () -> Sequence[str]
@@ -706,9 +816,14 @@ class MemoryCore(object):
         # type: (str, str) -> Optional[Preference]
         return self.store.get_preference(key, scope=scope)
 
-    def list_preferences(self, scope=None, include_superseded=False):
-        # type: (Optional[str], bool) -> List[Preference]
-        return self.store.list_preferences(scope=scope, include_superseded=include_superseded)
+    def list_preferences(self, scope=None, include_superseded=False, scopes=None, include_personas=False):
+        # type: (Optional[str], bool, Any, bool) -> List[Preference]
+        visibility = self._read_visibility(scope, scopes, None, include_personas)
+        return self.store.list_preferences(
+            include_superseded=include_superseded,
+            scopes=visibility.scopes,
+            exclude_prefixes=visibility.exclude_prefixes,
+        )
 
     def preference_history(self, key, scope="global"):
         # type: (str, str) -> List[Preference]
@@ -731,9 +846,12 @@ class MemoryCore(object):
         # type: (str, Optional[str]) -> List[ProjectState]
         return self.store.project_state_history(project_id, scope=scope)
 
-    def list_project_states(self, scope=None):
-        # type: (Optional[str]) -> List[ProjectState]
-        return self.store.list_project_states(scope=scope)
+    def list_project_states(self, scope=None, scopes=None, include_personas=False):
+        # type: (Optional[str], Any, bool) -> List[ProjectState]
+        visibility = self._read_visibility(scope, scopes, None, include_personas)
+        return self.store.list_project_states(
+            scopes=visibility.scopes, exclude_prefixes=visibility.exclude_prefixes
+        )
 
     # -- model -------------------------------------------------------------
 

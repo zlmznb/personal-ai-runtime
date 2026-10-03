@@ -5,6 +5,7 @@
 *.key
 
 # --- The single source of truth. Never commit a real personal memory db -----
+memory.sqlite
 *.sqlite
 *.sqlite3
 *.sqlite-wal
@@ -12,6 +13,9 @@
 *.db
 *.db-wal
 *.db-shm
+
+# --- Database backups -------------------------------------------------------
+memory_backup/
 
 # --- Exported personal data ------------------------------------------------
 *.jsonl

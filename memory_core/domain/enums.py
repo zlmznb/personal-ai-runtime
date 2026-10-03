@@ -16,6 +16,8 @@ class EventKind(str, Enum):
     MESSAGE = "message"
     NOTE = "note"
     SYSTEM = "system"
+    #: An ingested external document (v0.3). Raw history, never a memory.
+    DOCUMENT = "document"
 
 
 class Role(str, Enum):
@@ -55,5 +57,8 @@ class ItemType(str, Enum):
     PREFERENCE = "preference"
 
 
-#: Scope prefixes allowed in v0.1. ``global`` is the bare default.
-SCOPE_PREFIXES = ("project", "session", "device", "user", "org")
+#: Scope prefixes allowed. ``global`` is the bare default.
+#:
+#: ``persona`` was added in v0.3. Persona scopes are **fail-closed**: they are
+#: excluded from every read unless explicitly named (see ``domain.scopes``).
+SCOPE_PREFIXES = ("project", "session", "device", "user", "org", "persona")

@@ -99,6 +99,46 @@ def _row_dict(row):
     return dict(row)
 
 
+def _scope_filter_positional(column, scope, scopes, exclude_prefixes):
+    # type: (str, Any, Any, Any) -> Tuple[List[str], List[Any]]
+    """Build scope-visibility clauses with positional placeholders."""
+    clauses = []  # type: List[str]
+    values = []  # type: List[Any]
+    if scope is not None:
+        clauses.append("{0} = ?".format(column))
+        values.append(scope)
+    elif scopes:
+        clauses.append(
+            "{0} IN ({1})".format(column, ",".join("?" * len(scopes)))
+        )
+        values.extend(scopes)
+    for prefix in exclude_prefixes or ():
+        clauses.append("{0} NOT LIKE ?".format(column))
+        values.append("{0}:%".format(prefix))
+    return clauses, values
+
+
+def _scope_filter_named(column, scope, scopes, exclude_prefixes, params):
+    # type: (str, Any, Any, Any, Dict[str, Any]) -> List[str]
+    """Build scope-visibility clauses with named placeholders."""
+    clauses = []  # type: List[str]
+    if scope is not None:
+        clauses.append("{0} = :scope".format(column))
+        params["scope"] = scope
+    elif scopes:
+        names = []
+        for index, value in enumerate(scopes):
+            key = "scope{0}".format(index)
+            names.append(":" + key)
+            params[key] = value
+        clauses.append("{0} IN ({1})".format(column, ", ".join(names)))
+    for index, prefix in enumerate(exclude_prefixes or ()):
+        key = "excl{0}".format(index)
+        clauses.append("{0} NOT LIKE :{1}".format(column, key))
+        params[key] = "{0}:%".format(prefix)
+    return clauses
+
+
 class SqliteStore(object):
     """A thin, validated, transactional wrapper around one SQLite file."""
 
@@ -463,13 +503,24 @@ class SqliteStore(object):
             raise StorageError("delete_memory failed: {0}".format(exc))
         return removed == 1
 
-    def list_memories(self, scope=None, kinds=None, statuses=("active",), limit=100, offset=0):
-        # type: (Optional[str], Optional[Sequence[str]], Sequence[str], int, int) -> List[Memory]
-        clauses = []
+    def list_memories(
+        self,
+        scope=None,
+        kinds=None,
+        statuses=("active",),
+        limit=100,
+        offset=0,
+        scopes=None,
+        exclude_prefixes=(),
+    ):
+        # type: (Optional[str], Optional[Sequence[str]], Sequence[str], int, int, Any, Any) -> List[Memory]
+        clauses = []  # type: List[str]
         params = []  # type: List[Any]
-        if scope is not None:
-            clauses.append("scope = ?")
-            params.append(scope)
+        scope_clauses, scope_values = _scope_filter_positional(
+            "scope", scope, scopes, exclude_prefixes
+        )
+        clauses.extend(scope_clauses)
+        params.extend(scope_values)
         if kinds:
             clauses.append("kind IN ({0})".format(",".join("?" * len(kinds))))
             params.extend(kinds)
@@ -484,6 +535,17 @@ class SqliteStore(object):
             tuple(params),
         ).fetchall()
         return [Memory.from_row(_row_dict(row)) for row in rows]
+
+    def list_scopes(self):
+        # type: () -> List[str]
+        """Every scope that currently holds a row, in any source table."""
+        rows = self.connection.execute(
+            "SELECT scope FROM memories "
+            "UNION SELECT scope FROM preferences "
+            "UNION SELECT scope FROM project_state "
+            "ORDER BY scope ASC"
+        ).fetchall()
+        return [str(row["scope"]) for row in rows]
 
     def count_memories(self, status=None):
         # type: (Optional[str]) -> int
@@ -501,18 +563,24 @@ class SqliteStore(object):
         kinds=None,
         statuses=("active",),
         limit=10,
+        scopes=None,
+        exclude_prefixes=(),
     ):
-        # type: (str, str, Optional[str], Optional[Sequence[str]], Sequence[str], int) -> List[Tuple[Memory, float, bool]]
+        # type: (str, str, Optional[str], Optional[Sequence[str]], Sequence[str], int, Any, Any) -> List[Tuple[Memory, float, bool]]
         """BM25 search. Returns ``(memory, rank, phrase_hit)`` triples.
 
         ``rank`` is raw FTS5 bm25 (more negative is better). Scoring is applied
         by ``retrieval.fusion`` so that all ranking policy lives in one place.
+
+        ``scopes`` / ``exclude_prefixes`` implement scope visibility; see
+        ``domain.scopes``. Both default to "no filter", so v0.2 callers are
+        unaffected.
         """
         params = {"match": match_expression, "needle": needle, "limit": int(limit)}  # type: Dict[str, Any]
         clauses = ["memories_fts MATCH :match"]
-        if scope is not None:
-            clauses.append("m.scope = :scope")
-            params["scope"] = scope
+        clauses.extend(
+            _scope_filter_named("m.scope", scope, scopes, exclude_prefixes, params)
+        )
         if kinds:
             names = []
             for index, kind in enumerate(kinds):
@@ -612,13 +680,15 @@ class SqliteStore(object):
         ).fetchone()
         return None if row is None else Preference.from_row(_row_dict(row))
 
-    def list_preferences(self, scope=None, include_superseded=False):
-        # type: (Optional[str], bool) -> List[Preference]
-        clauses = []
+    def list_preferences(self, scope=None, include_superseded=False, scopes=None, exclude_prefixes=()):
+        # type: (Optional[str], bool, Any, Any) -> List[Preference]
+        clauses = []  # type: List[str]
         params = []  # type: List[Any]
-        if scope is not None:
-            clauses.append("scope = ?")
-            params.append(scope)
+        scope_clauses, scope_values = _scope_filter_positional(
+            "scope", scope, scopes, exclude_prefixes
+        )
+        clauses.extend(scope_clauses)
+        params.extend(scope_values)
         if not include_superseded:
             clauses.append("superseded_by IS NULL")
         where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
@@ -644,13 +714,13 @@ class SqliteStore(object):
             sql = "SELECT COUNT(*) AS n FROM preferences"
         return int(self.connection.execute(sql).fetchone()["n"])
 
-    def search_preferences(self, match_expression, needle="", scope=None, limit=10):
-        # type: (str, str, Optional[str], int) -> List[Tuple[Preference, float, bool]]
+    def search_preferences(self, match_expression, needle="", scope=None, limit=10, scopes=None, exclude_prefixes=()):
+        # type: (str, str, Optional[str], int, Any, Any) -> List[Tuple[Preference, float, bool]]
         params = {"match": match_expression, "needle": needle, "limit": int(limit)}  # type: Dict[str, Any]
         clauses = ["preferences_fts MATCH :match", "p.superseded_by IS NULL"]
-        if scope is not None:
-            clauses.append("p.scope = :scope")
-            params["scope"] = scope
+        clauses.extend(
+            _scope_filter_named("p.scope", scope, scopes, exclude_prefixes, params)
+        )
         sql = (
             "SELECT p.*, bm25(preferences_fts, 0.0, 1.0, 0.5) AS rank"
             ", instr(preferences_fts.key || ' ' || preferences_fts.statement, :needle) AS phrase_pos"
@@ -723,19 +793,17 @@ class SqliteStore(object):
         ).fetchall()
         return [ProjectState.from_row(_row_dict(row)) for row in rows]
 
-    def list_project_states(self, scope=None):
-        # type: (Optional[str]) -> List[ProjectState]
-        if scope is None:
-            rows = self.connection.execute(
-                "SELECT * FROM project_state WHERE superseded_by IS NULL "
-                "ORDER BY project_id ASC, scope ASC"
-            ).fetchall()
-        else:
-            rows = self.connection.execute(
-                "SELECT * FROM project_state WHERE superseded_by IS NULL AND scope = ? "
-                "ORDER BY project_id ASC",
-                (scope,),
-            ).fetchall()
+    def list_project_states(self, scope=None, scopes=None, exclude_prefixes=()):
+        # type: (Optional[str], Any, Any) -> List[ProjectState]
+        scope_clauses, scope_values = _scope_filter_positional(
+            "scope", scope, scopes, exclude_prefixes
+        )
+        clauses = ["superseded_by IS NULL"] + scope_clauses
+        where = " WHERE " + " AND ".join(clauses)
+        rows = self.connection.execute(
+            "SELECT * FROM project_state" + where + " ORDER BY scope ASC, project_id ASC",
+            tuple(scope_values),
+        ).fetchall()
         return [ProjectState.from_row(_row_dict(row)) for row in rows]
 
     def count_project_states(self, current_only=True):

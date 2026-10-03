@@ -1,0 +1,1 @@
+"""Observable Obsidian bridge internals."""
