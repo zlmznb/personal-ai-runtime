@@ -1,0 +1,169 @@
+{
+  "embedding_dim": 256,
+  "embedding_model": "fake-embedding:bench-embed",
+  "numpy": false,
+  "queries": 3,
+  "results": [
+    {
+      "embedding_dim": 256,
+      "embedding_model": "fake-embedding:bench-embed",
+      "index": {
+        "build_seconds": 0.0415,
+        "failures": 0,
+        "pending_before": 100,
+        "rows": 100
+      },
+      "insert": {
+        "bulk_per_second": 8123.4,
+        "bulk_seconds": 0.0123
+      },
+      "memories": 100,
+      "numpy": false,
+      "queries": {
+        "hybrid": {
+          "avg_hits": 10.0,
+          "max_ms": 2.2509,
+          "mean_ms": 1.4227,
+          "p50_ms": 1.342,
+          "p95_ms": 2.1822,
+          "queries": 24
+        },
+        "keyword": {
+          "avg_hits": 4.62,
+          "max_ms": 0.5381,
+          "mean_ms": 0.3568,
+          "p50_ms": 0.373,
+          "p95_ms": 0.5263,
+          "queries": 24
+        },
+        "semantic": {
+          "avg_hits": 10.0,
+          "max_ms": 1.639,
+          "mean_ms": 1.3402,
+          "p50_ms": 1.3355,
+          "p95_ms": 1.5713,
+          "queries": 24
+        }
+      },
+      "size": {
+        "bytes_per_vector": 1474.6,
+        "db_bytes_with_index": 368640,
+        "db_bytes_without_index": 221184,
+        "index_bytes": 147456,
+        "page_bytes": 368640,
+        "raw_vector_bytes": 102400
+      }
+    },
+    {
+      "embedding_dim": 256,
+      "embedding_model": "fake-embedding:bench-embed",
+      "index": {
+        "build_seconds": 0.3946,
+        "failures": 0,
+        "pending_before": 1000,
+        "rows": 1000
+      },
+      "insert": {
+        "bulk_per_second": 14929.7,
+        "bulk_seconds": 0.067
+      },
+      "memories": 1000,
+      "numpy": false,
+      "queries": {
+        "hybrid": {
+          "avg_hits": 10.0,
+          "max_ms": 10.7926,
+          "mean_ms": 7.4636,
+          "p50_ms": 6.9217,
+          "p95_ms": 10.1153,
+          "queries": 24
+        },
+        "keyword": {
+          "avg_hits": 8.75,
+          "max_ms": 0.9337,
+          "mean_ms": 0.7109,
+          "p50_ms": 0.7464,
+          "p95_ms": 0.8863,
+          "queries": 24
+        },
+        "semantic": {
+          "avg_hits": 10.0,
+          "max_ms": 8.1471,
+          "mean_ms": 6.9082,
+          "p50_ms": 6.9235,
+          "p95_ms": 7.6872,
+          "queries": 24
+        }
+      },
+      "size": {
+        "bytes_per_vector": 1478.7,
+        "db_bytes_with_index": 2396160,
+        "db_bytes_without_index": 917504,
+        "index_bytes": 1478656,
+        "page_bytes": 2396160,
+        "raw_vector_bytes": 1024000
+      }
+    },
+    {
+      "embedding_dim": 256,
+      "embedding_model": "fake-embedding:bench-embed",
+      "index": {
+        "build_seconds": 4.0071,
+        "failures": 0,
+        "pending_before": 10000,
+        "rows": 10000
+      },
+      "insert": {
+        "bulk_per_second": 15864.1,
+        "bulk_seconds": 0.6304
+      },
+      "memories": 10000,
+      "numpy": false,
+      "queries": {
+        "hybrid": {
+          "avg_hits": 10.0,
+          "max_ms": 62.4722,
+          "mean_ms": 59.54,
+          "p50_ms": 59.9923,
+          "p95_ms": 62.0961,
+          "queries": 24
+        },
+        "keyword": {
+          "avg_hits": 8.75,
+          "max_ms": 7.5817,
+          "mean_ms": 4.9983,
+          "p50_ms": 5.3636,
+          "p95_ms": 7.5729,
+          "queries": 24
+        },
+        "semantic": {
+          "avg_hits": 10.0,
+          "max_ms": 69.1242,
+          "mean_ms": 60.1757,
+          "p50_ms": 60.3809,
+          "p95_ms": 64.4435,
+          "queries": 24
+        }
+      },
+      "size": {
+        "bytes_per_vector": 1481.9,
+        "db_bytes_with_index": 22609920,
+        "db_bytes_without_index": 7790592,
+        "index_bytes": 14819328,
+        "page_bytes": 22609920,
+        "raw_vector_bytes": 10240000
+      }
+    }
+  ],
+  "single_insert": {
+    "mean_ms": 6.1408,
+    "p50_ms": 5.9613,
+    "p95_ms": 7.171,
+    "samples": 50
+  },
+  "sizes": [
+    100,
+    1000,
+    10000
+  ]
+}

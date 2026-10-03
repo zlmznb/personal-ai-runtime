@@ -1,0 +1,12 @@
+{
+  "_comment": "Optional. Defaults below are used when this file is absent. Retrieval ranking is computed only from stored data (BM25, salience, created_at, id) - never from wall-clock 'now' - so results are reproducible run to run.",
+  "db_path": "memory.sqlite",
+  "retrieval": {
+    "default_limit": 10,
+    "max_limit": 100,
+    "memory_weight": 1.0,
+    "preference_weight": 1.5,
+    "salience_weight": 0.15,
+    "preference_prior": 0.5
+  }
+}

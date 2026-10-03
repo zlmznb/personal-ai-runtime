@@ -1,0 +1,45 @@
+{
+  "_comment": "Copy to config/models.json to activate. Roles are independent, so a single run can mix vendors: a cloud chat model with local embeddings, for example. NOTE: the DeepSeek API has no embeddings endpoint, which is exactly why chat and embedding are separate provider types. No model is required - the Memory Core works fully without any provider, and retrieval degrades from hybrid to keyword.",
+  "providers": {
+    "fake": {
+      "type": "fake"
+    },
+    "ollama": {
+      "type": "ollama",
+      "base_url": "http://127.0.0.1:11434/v1",
+      "model": "qwen3:8b",
+      "timeout": 300
+    },
+    "deepseek": {
+      "type": "deepseek",
+      "base_url": "https://api.deepseek.com/v1",
+      "model": "deepseek-chat",
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "timeout": 120
+    },
+    "fake-embedding": {
+      "type": "fake-embedding",
+      "model": "fake-embed",
+      "dim": 64
+    },
+    "local-embedding": {
+      "type": "ollama-embedding",
+      "base_url": "http://127.0.0.1:11434",
+      "model": "nomic-embed-text",
+      "timeout": 120,
+      "api_style": "native"
+    },
+    "small-embedding": {
+      "type": "ollama-embedding",
+      "base_url": "http://127.0.0.1:11434",
+      "model": "all-minilm",
+      "timeout": 60,
+      "api_style": "native"
+    }
+  },
+  "roles": {
+    "chat": "fake",
+    "embedding": "fake-embedding",
+    "rerank": null
+  }
+}

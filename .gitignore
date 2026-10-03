@@ -1,0 +1,38 @@
+# --- Secrets: never commit these -------------------------------------------
+.env
+.env.*
+*.pem
+*.key
+
+# --- The single source of truth. Never commit a real personal memory db -----
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-wal
+*.db-shm
+
+# --- Exported personal data ------------------------------------------------
+*.jsonl
+export*.json
+snapshot*.sqlite
+
+# --- Local config may contain keys -----------------------------------------
+config/models.json
+
+# --- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# --- Build / test artifacts ------------------------------------------------
+build/
+dist/
+.pytest_cache/
+
+# --- Logs ------------------------------------------------------------------
+logs/
+*.log

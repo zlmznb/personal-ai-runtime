@@ -1,0 +1,169 @@
+{
+  "embedding_dim": 256,
+  "embedding_model": "fake-embedding:bench-embed",
+  "numpy": true,
+  "queries": 20,
+  "results": [
+    {
+      "embedding_dim": 256,
+      "embedding_model": "fake-embedding:bench-embed",
+      "index": {
+        "build_seconds": 0.0414,
+        "failures": 0,
+        "pending_before": 100,
+        "rows": 100
+      },
+      "insert": {
+        "bulk_per_second": 8679.4,
+        "bulk_seconds": 0.0115
+      },
+      "memories": 100,
+      "numpy": true,
+      "queries": {
+        "hybrid": {
+          "avg_hits": 10.0,
+          "max_ms": 1.7273,
+          "mean_ms": 0.884,
+          "p50_ms": 0.8509,
+          "p95_ms": 1.2186,
+          "queries": 160
+        },
+        "keyword": {
+          "avg_hits": 4.62,
+          "max_ms": 0.7003,
+          "mean_ms": 0.3146,
+          "p50_ms": 0.2964,
+          "p95_ms": 0.5166,
+          "queries": 160
+        },
+        "semantic": {
+          "avg_hits": 10.0,
+          "max_ms": 2.0261,
+          "mean_ms": 0.8964,
+          "p50_ms": 0.8327,
+          "p95_ms": 1.3613,
+          "queries": 160
+        }
+      },
+      "size": {
+        "bytes_per_vector": 1474.6,
+        "db_bytes_with_index": 368640,
+        "db_bytes_without_index": 221184,
+        "index_bytes": 147456,
+        "page_bytes": 368640,
+        "raw_vector_bytes": 102400
+      }
+    },
+    {
+      "embedding_dim": 256,
+      "embedding_model": "fake-embedding:bench-embed",
+      "index": {
+        "build_seconds": 0.3752,
+        "failures": 0,
+        "pending_before": 1000,
+        "rows": 1000
+      },
+      "insert": {
+        "bulk_per_second": 14752.2,
+        "bulk_seconds": 0.0678
+      },
+      "memories": 1000,
+      "numpy": true,
+      "queries": {
+        "hybrid": {
+          "avg_hits": 10.0,
+          "max_ms": 3.7224,
+          "mean_ms": 1.8024,
+          "p50_ms": 1.7477,
+          "p95_ms": 2.3938,
+          "queries": 160
+        },
+        "keyword": {
+          "avg_hits": 8.75,
+          "max_ms": 1.3702,
+          "mean_ms": 0.7437,
+          "p50_ms": 0.7532,
+          "p95_ms": 1.0974,
+          "queries": 160
+        },
+        "semantic": {
+          "avg_hits": 10.0,
+          "max_ms": 2.8248,
+          "mean_ms": 1.7514,
+          "p50_ms": 1.6808,
+          "p95_ms": 2.3756,
+          "queries": 160
+        }
+      },
+      "size": {
+        "bytes_per_vector": 1478.7,
+        "db_bytes_with_index": 2396160,
+        "db_bytes_without_index": 917504,
+        "index_bytes": 1478656,
+        "page_bytes": 2396160,
+        "raw_vector_bytes": 1024000
+      }
+    },
+    {
+      "embedding_dim": 256,
+      "embedding_model": "fake-embedding:bench-embed",
+      "index": {
+        "build_seconds": 3.8574,
+        "failures": 0,
+        "pending_before": 10000,
+        "rows": 10000
+      },
+      "insert": {
+        "bulk_per_second": 15213.9,
+        "bulk_seconds": 0.6573
+      },
+      "memories": 10000,
+      "numpy": true,
+      "queries": {
+        "hybrid": {
+          "avg_hits": 10.0,
+          "max_ms": 16.4566,
+          "mean_ms": 10.6287,
+          "p50_ms": 11.2609,
+          "p95_ms": 12.8266,
+          "queries": 160
+        },
+        "keyword": {
+          "avg_hits": 8.75,
+          "max_ms": 9.3452,
+          "mean_ms": 4.6913,
+          "p50_ms": 5.2606,
+          "p95_ms": 7.0252,
+          "queries": 160
+        },
+        "semantic": {
+          "avg_hits": 10.0,
+          "max_ms": 21.9222,
+          "mean_ms": 10.6484,
+          "p50_ms": 10.9243,
+          "p95_ms": 13.4084,
+          "queries": 160
+        }
+      },
+      "size": {
+        "bytes_per_vector": 1481.9,
+        "db_bytes_with_index": 22609920,
+        "db_bytes_without_index": 7790592,
+        "index_bytes": 14819328,
+        "page_bytes": 22609920,
+        "raw_vector_bytes": 10240000
+      }
+    }
+  ],
+  "single_insert": {
+    "mean_ms": 6.0669,
+    "p50_ms": 5.9548,
+    "p95_ms": 6.6894,
+    "samples": 50
+  },
+  "sizes": [
+    100,
+    1000,
+    10000
+  ]
+}

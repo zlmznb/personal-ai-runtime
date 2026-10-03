@@ -1,0 +1,58 @@
+{
+  "_comment": "Scripted session used by the model-swap isolation test (MSIT-1). It deliberately exercises every record type: events, semantic/episodic/identity memories, preferences, and project state (including supersede).",
+  "steps": [
+    {"op": "observe", "text": "记住：用户偏好本地优先，隐私敏感"},
+    {"op": "observe", "text": "记住偏好：theme = dark"},
+    {"op": "observe", "text": "记住偏好：editor = vscode"},
+    {"op": "observe", "text": "身份：我是一个本地优先的个人 AI，名字叫 Memory"},
+    {"op": "observe", "text": "事件：2026-10-02 决定 v0.1 不使用 Chroma 与 Qdrant"},
+    {"op": "observe", "text": "项目状态：memory = {\"phase\": \"v0.1\"}"},
+
+    {"op": "remember", "content": "长期目标是记忆与模型推理彻底解耦", "kind": "semantic", "tags": ["architecture", "decoupling"], "salience": 0.9},
+    {"op": "remember", "content": "模型更换不能导致长期个人数据丢失", "kind": "semantic", "tags": ["requirement"], "salience": 1.0},
+    {"op": "remember", "content": "最终要扩展到 Agent、电脑、手机、IoT 与端云协同", "kind": "semantic", "tags": ["roadmap"], "salience": 0.7},
+    {"op": "remember", "content": "Use SQLite as the single source of truth", "kind": "semantic", "tags": ["architecture"], "salience": 0.9},
+    {"op": "remember", "content": "Memory Core stores identity, memories, preferences and project state", "kind": "semantic", "tags": ["architecture"]},
+    {"op": "remember", "content": "Retrieval must be deterministic and never call a model", "kind": "semantic", "tags": ["architecture", "adr"]},
+    {"op": "remember", "content": "v0.1 does not use LiteLLM, Mem0 or LangGraph", "kind": "semantic", "tags": ["scope"]},
+    {"op": "remember", "content": "DeepSeek provides cloud chat only, with no embeddings endpoint", "kind": "semantic", "tags": ["provider"]},
+
+    {"op": "set_preference", "key": "privacy", "value": "local-only"},
+    {"op": "set_preference", "key": "language", "value": "zh"},
+
+    {"op": "set_project_state", "project_id": "memory", "state": {"phase": "v0.1", "storage": "sqlite"}},
+    {"op": "set_project_state", "project_id": "persona", "state": {"status": "planned"}}
+  ],
+  "expected": {
+    "events": 6,
+    "memories": 11,
+    "active_preferences": 4,
+    "current_project_states": 2
+  },
+  "queries": [
+    "本地优先",
+    "偏好",
+    "隐私",
+    "项目",
+    "记忆",
+    "身份",
+    "theme",
+    "editor",
+    "不存在的词汇xyzzy",
+    "本地",
+    "优先",
+    "个人 AI",
+    "Chroma",
+    "模型",
+    "SQLite",
+    "memory",
+    "v0.1",
+    "解耦",
+    "端云协同",
+    "架构",
+    "deterministic",
+    "LiteLLM",
+    "DeepSeek",
+    "IoT"
+  ]
+}
